@@ -1,0 +1,90 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run tests
+        run: cargo test --locked
+
+  package:
+    name: Package ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            binary: harness
+            archive: clodhopper-linux-x86_64.tar.gz
+          - os: macos-14
+            target: macos-aarch64
+            binary: harness
+            archive: clodhopper-macos-aarch64.tar.gz
+          - os: windows-latest
+            target: windows-x86_64
+            binary: harness.exe
+            archive: clodhopper-windows-x86_64.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="clodhopper-${{ matrix.target }}"
+          mkdir -p "dist/$package/bin"
+          cp "target/release/${{ matrix.binary }}" "dist/$package/bin/harness"
+          cp scripts/install-unix.sh "dist/$package/install.sh"
+          cp README.md "dist/$package/README.md"
+          cp -R docs "dist/$package/docs"
+          chmod +x "dist/$package/install.sh" "dist/$package/bin/harness"
+          tar -czf "dist/${{ matrix.archive }}" -C dist "$package"
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Package = "clodhopper-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "dist\$Package\bin" | Out-Null
+          Copy-Item "target\release\${{ matrix.binary }}" "dist\$Package\bin\harness.exe"
+          Copy-Item "scripts\install-windows.ps1" "dist\$Package\install.ps1"
+          Copy-Item "README.md" "dist\$Package\README.md"
+          Copy-Item "docs" "dist\$Package\docs" -Recurse
+          Compress-Archive -Path "dist\$Package" -DestinationPath "dist\${{ matrix.archive }}" -Force
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: dist/${{ matrix.archive }}
+          if-no-files-found: error
+

@@ -1,0 +1,5 @@
+/target/
+/.harness/
+!.harness.example/
+*.log
+
