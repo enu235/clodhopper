@@ -45,7 +45,7 @@ cd clodhopper-macos-aarch64
 ./install.sh
 ```
 
-Windows PowerShell:
+PowerShell 7 (`pwsh`, cross-platform; Windows PowerShell 5.1 is deprecated):
 
 ```powershell
 Expand-Archive .\clodhopper-windows-x86_64.zip
